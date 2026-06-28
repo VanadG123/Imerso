@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
@@ -30,7 +31,7 @@ abstract final class AppRoutes {
 }
 
 final appRouter = GoRouter(
-  initialLocation: AppRoutes.splash,
+  initialLocation: kIsWeb ? AppRoutes.welcome : AppRoutes.splash,
   debugLogDiagnostics: false,
   routes: [
     GoRoute(

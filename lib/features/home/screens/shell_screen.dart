@@ -18,20 +18,78 @@ class ShellScreen extends StatelessWidget {
     (label: AppStrings.navProfile, icon: Icons.person_outline_rounded, selectedIcon: Icons.person_rounded),
   ];
 
+  void _onTap(int index) => navigationShell.goBranch(
+        index,
+        initialLocation: index == navigationShell.currentIndex,
+      );
+
   @override
   Widget build(BuildContext context) {
+    final isWide = MediaQuery.sizeOf(context).width >= 600;
+
+    if (isWide) {
+      return Scaffold(
+        backgroundColor: AppColors.background,
+        body: Row(
+          children: [
+            _SideRail(
+              currentIndex: navigationShell.currentIndex,
+              onTap: _onTap,
+            ),
+            const VerticalDivider(
+              width: 1,
+              thickness: 1,
+              color: AppColors.border,
+            ),
+            Expanded(child: navigationShell),
+          ],
+        ),
+      );
+    }
+
     return Scaffold(
       body: navigationShell,
       bottomNavigationBar: _BottomNav(
         currentIndex: navigationShell.currentIndex,
-        onTap: (index) => navigationShell.goBranch(
-          index,
-          initialLocation: index == navigationShell.currentIndex,
-        ),
+        onTap: _onTap,
       ),
     );
   }
 }
+
+// ── Side rail (tablet / desktop) ──────────────────────────────────────────────
+
+class _SideRail extends StatelessWidget {
+  const _SideRail({required this.currentIndex, required this.onTap});
+
+  final int currentIndex;
+  final ValueChanged<int> onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return NavigationRail(
+      selectedIndex: currentIndex,
+      onDestinationSelected: onTap,
+      backgroundColor: AppColors.surface,
+      labelType: NavigationRailLabelType.all,
+      selectedIconTheme: const IconThemeData(color: AppColors.primaryLight),
+      selectedLabelTextStyle: const TextStyle(color: AppColors.primaryLight),
+      unselectedIconTheme: const IconThemeData(color: AppColors.onSurfaceMuted),
+      unselectedLabelTextStyle: const TextStyle(color: AppColors.onSurfaceMuted),
+      destinations: ShellScreen._destinations
+          .map(
+            (d) => NavigationRailDestination(
+              icon: Icon(d.icon),
+              selectedIcon: Icon(d.selectedIcon),
+              label: Text(d.label),
+            ),
+          )
+          .toList(),
+    );
+  }
+}
+
+// ── Bottom nav (phone) ────────────────────────────────────────────────────────
 
 class _BottomNav extends StatelessWidget {
   const _BottomNav({required this.currentIndex, required this.onTap});

@@ -49,6 +49,17 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   @override
   Widget build(BuildContext context) {
     final feed = ref.watch(filteredFeedProvider);
+    final isWide = MediaQuery.sizeOf(context).width >= 600;
+
+    final pageView = feed.isEmpty
+        ? const _EmptyFeed()
+        : PageView.builder(
+            controller: _pageCtrl,
+            scrollDirection: Axis.vertical,
+            itemCount: feed.length,
+            itemBuilder: (_, index) =>
+                VideoFeedCard(key: ValueKey(feed[index].id), item: feed[index]),
+          );
 
     return Scaffold(
       backgroundColor: Colors.black,
@@ -56,15 +67,18 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       body: Stack(
         children: [
           // ── Feed ─────────────────────────────────────────────────────────
-          feed.isEmpty
-              ? const _EmptyFeed()
-              : PageView.builder(
-                  controller: _pageCtrl,
-                  scrollDirection: Axis.vertical,
-                  itemCount: feed.length,
-                  itemBuilder: (_, index) =>
-                      VideoFeedCard(key: ValueKey(feed[index].id), item: feed[index]),
+          if (isWide)
+            Center(
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 420),
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(12),
+                  child: pageView,
                 ),
+              ),
+            )
+          else
+            pageView,
 
           // ── Top overlay (app name + filter chips) ────────────────────────
           Positioned(

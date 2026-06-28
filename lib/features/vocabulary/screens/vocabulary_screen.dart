@@ -7,10 +7,27 @@ import '../../../core/constants/app_spacing.dart';
 import '../../../core/constants/app_text_styles.dart';
 import '../../../core/router/app_router.dart';
 import '../../../core/widgets/app_empty_state.dart';
+import '../../../core/widgets/app_shimmer.dart';
 import '../../../data/models/vocabulary_model.dart';
 import '../providers/vocabulary_provider.dart';
-import '../widgets/stat_mini_card.dart';
 import '../widgets/word_card.dart';
+
+// ── Flag helper ───────────────────────────────────────────────────────────────
+
+String _flagForLanguage(String lang) => switch (lang) {
+      'Japanese' => '🇯🇵',
+      'Spanish' => '🇪🇸',
+      'Korean' => '🇰🇷',
+      'French' => '🇫🇷',
+      'German' => '🇩🇪',
+      'Italian' => '🇮🇹',
+      'Portuguese' => '🇵🇹',
+      'Mandarin' => '🇨🇳',
+      'Russian' => '🇷🇺',
+      'Arabic' => '🇸🇦',
+      'Hindi' => '🇮🇳',
+      _ => '🌐',
+    };
 
 // ── Vocabulary screen ─────────────────────────────────────────────────────────
 
@@ -23,6 +40,20 @@ class VocabularyScreen extends ConsumerStatefulWidget {
 
 class _VocabularyScreenState extends ConsumerState<VocabularyScreen> {
   final _searchController = TextEditingController();
+  bool _loading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      ref
+          .read(vocabularyNotifierProvider.notifier)
+          .initializeFromPrefs()
+          .then((_) {
+        if (mounted) setState(() => _loading = false);
+      });
+    });
+  }
 
   @override
   void dispose() {
@@ -36,6 +67,13 @@ class _VocabularyScreenState extends ConsumerState<VocabularyScreen> {
     final notifier = ref.read(vocabularyNotifierProvider.notifier);
     final filtered = notifier.filteredWords;
 
+    // Derive distinct languages from saved words preserving insertion order.
+    final languageSet = <String>{};
+    for (final w in vocabState.savedWords) {
+      languageSet.add(w.sourceLanguage);
+    }
+    final languages = ['All', ...languageSet];
+
     return Scaffold(
       backgroundColor: AppColors.background,
       body: CustomScrollView(
@@ -45,24 +83,19 @@ class _VocabularyScreenState extends ConsumerState<VocabularyScreen> {
             pinned: true,
             backgroundColor: AppColors.background,
             surfaceTintColor: Colors.transparent,
-            title: Text('My Vocabulary', style: AppTextStyles.headingLarge),
+            elevation: 0,
+            title: Text('Vocabulary', style: AppTextStyles.headingLarge),
             actions: [
               IconButton(
-                icon: const Icon(Icons.sort_rounded,
-                    color: AppColors.onSurface),
-                tooltip: 'Sort',
-                onPressed: () => _showSortSheet(context, vocabState, notifier),
+                icon: const Icon(Icons.tune_rounded, color: AppColors.onSurface),
+                onPressed: () =>
+                    _showSortSheet(context, vocabState, notifier),
               ),
             ],
             bottom: PreferredSize(
-              preferredSize: const Size.fromHeight(60),
+              preferredSize: const Size.fromHeight(56),
               child: Padding(
-                padding: const EdgeInsets.fromLTRB(
-                  AppSpacing.md,
-                  0,
-                  AppSpacing.md,
-                  AppSpacing.sm,
-                ),
+                padding: const EdgeInsets.fromLTRB(16, 0, 16, 10),
                 child: TextField(
                   controller: _searchController,
                   onChanged: notifier.updateSearch,
@@ -70,11 +103,11 @@ class _VocabularyScreenState extends ConsumerState<VocabularyScreen> {
                   decoration: InputDecoration(
                     filled: true,
                     fillColor: const Color(0xFF1E1E2A),
-                    hintText: 'Search words…',
+                    hintText: 'Search words...',
                     hintStyle: AppTextStyles.bodyMedium
                         .copyWith(color: AppColors.onSurfaceMuted),
                     prefixIcon: const Icon(Icons.search_rounded,
-                        color: AppColors.onSurfaceMuted),
+                        color: AppColors.onSurfaceMuted, size: 20),
                     suffixIcon: vocabState.searchQuery.isNotEmpty
                         ? IconButton(
                             icon: const Icon(Icons.close_rounded,
@@ -86,107 +119,209 @@ class _VocabularyScreenState extends ConsumerState<VocabularyScreen> {
                           )
                         : null,
                     border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
+                      borderRadius: BorderRadius.circular(14),
                       borderSide: BorderSide.none,
                     ),
-                    contentPadding: const EdgeInsets.symmetric(vertical: 12),
+                    contentPadding: EdgeInsets.zero,
                   ),
                 ),
               ),
             ),
           ),
 
-          // ── Filter chips ───────────────────────────────────────────────────
-          SliverToBoxAdapter(
-            child: _FilterChipsRow(
-              vocabState: vocabState,
-              notifier: notifier,
-            ),
-          ),
-
-          // ── Stats row ──────────────────────────────────────────────────────
-          SliverToBoxAdapter(
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(
-                AppSpacing.md,
-                AppSpacing.sm,
-                AppSpacing.md,
-                AppSpacing.md,
-              ),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: StatMiniCard(
-                      value: notifier.totalCount,
-                      label: 'Total',
-                      icon: Icons.bookmark_rounded,
-                      color: AppColors.secondary,
-                    ),
-                  ),
-                  const SizedBox(width: AppSpacing.sm),
-                  Expanded(
-                    child: StatMiniCard(
-                      value: notifier.masteredCount,
-                      label: 'Mastered',
-                      icon: Icons.star_rounded,
-                      color: AppColors.warning,
-                    ),
-                  ),
-                  const SizedBox(width: AppSpacing.sm),
-                  Expanded(
-                    child: StatMiniCard(
-                      value: notifier.thisWeekCount,
-                      label: 'This week',
-                      icon: Icons.trending_up_rounded,
-                      color: AppColors.success,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-
-          // ── Word list ──────────────────────────────────────────────────────
-          if (filtered.isEmpty)
-            SliverFillRemaining(
-              hasScrollBody: false,
-              child: AppEmptyState(
-                icon: Icons.menu_book_outlined,
-                title: vocabState.searchQuery.isNotEmpty
-                    ? 'No words match "${vocabState.searchQuery}"'
-                    : 'No words saved yet',
-                subtitle: vocabState.searchQuery.isNotEmpty
-                    ? 'Try a different search term'
-                    : 'Tap highlighted words in the feed to save them here',
-              ),
-            )
-          else
+          if (_loading)
+            // ── Shimmer while prefs load ─────────────────────────────────────
             SliverList(
               delegate: SliverChildBuilderDelegate(
-                (context, index) {
-                  final savedWord = filtered[index];
-                  return Dismissible(
-                    key: ValueKey(savedWord.word.id),
-                    direction: DismissDirection.endToStart,
-                    background: _SwipeDeleteBackground(),
-                    confirmDismiss: (_) => _confirmDismiss(context),
-                    onDismissed: (_) =>
-                        ref
-                            .read(vocabularyNotifierProvider.notifier)
-                            .removeWord(savedWord.word.id),
-                    child: WordCard(
-                      savedWord: savedWord,
-                      onTap: () => context.push(
-                        AppRoutes.wordDetailPath(savedWord.word.id),
+                (_, __) => const Padding(
+                  padding: EdgeInsets.symmetric(
+                      horizontal: 16, vertical: 6),
+                  child: AppShimmer(
+                    height: 80,
+                    width: double.infinity,
+                    borderRadius: 12,
+                  ),
+                ),
+                childCount: 6,
+              ),
+            )
+          else ...[
+            // ── Language filter ──────────────────────────────────────────────
+            SliverToBoxAdapter(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'LANGUAGE',
+                      style: AppTextStyles.caption.copyWith(
+                        color: AppColors.onSurfaceMuted,
+                        letterSpacing: 1.2,
+                        fontWeight: FontWeight.w600,
                       ),
                     ),
-                  );
-                },
-                childCount: filtered.length,
+                    const SizedBox(height: 8),
+                    SingleChildScrollView(
+                      scrollDirection: Axis.horizontal,
+                      child: Row(
+                        children: [
+                          for (int i = 0; i < languages.length; i++) ...[
+                            if (i > 0) const SizedBox(width: 8),
+                            _LanguageChip(
+                              label: languages[i],
+                              flag: _flagForLanguage(languages[i]),
+                              isSelected: languages[i] == 'All'
+                                  ? vocabState.activeLanguageFilter == null
+                                  : vocabState.activeLanguageFilter ==
+                                      languages[i],
+                              onTap: () => notifier.setLanguageFilter(
+                                  languages[i] == 'All' ? null : languages[i]),
+                            ),
+                          ],
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
               ),
             ),
 
-          const SliverToBoxAdapter(child: SizedBox(height: AppSpacing.xl)),
+            // ── Word type filter ─────────────────────────────────────────────
+            SliverToBoxAdapter(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'WORD TYPE',
+                      style: AppTextStyles.caption.copyWith(
+                        color: AppColors.onSurfaceMuted,
+                        letterSpacing: 1.2,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: [
+                        _TypeChip(
+                          label: 'All types',
+                          isSelected: vocabState.activePosFilter == null,
+                          onTap: () => notifier.setPosFilter(null),
+                        ),
+                        _TypeChip(
+                          label: 'Nouns',
+                          isSelected: vocabState.activePosFilter == 'noun',
+                          onTap: () => notifier.setPosFilter('noun'),
+                        ),
+                        _TypeChip(
+                          label: 'Verbs',
+                          isSelected: vocabState.activePosFilter == 'verb',
+                          onTap: () => notifier.setPosFilter('verb'),
+                        ),
+                        _TypeChip(
+                          label: 'Adjectives',
+                          isSelected:
+                              vocabState.activePosFilter == 'adjective',
+                          onTap: () => notifier.setPosFilter('adjective'),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ),
+
+            // ── Stats row ────────────────────────────────────────────────────
+            SliverToBoxAdapter(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(16, 16, 16, 4),
+                child: Row(
+                  children: [
+                    _InlineStat(
+                      icon: Icons.bookmark_rounded,
+                      iconColor: AppColors.secondary,
+                      value: notifier.totalCount,
+                      label: 'Total',
+                    ),
+                    const SizedBox(width: 8),
+                    _InlineStat(
+                      icon: Icons.star_rounded,
+                      iconColor: AppColors.warning,
+                      value: notifier.masteredCount,
+                      label: 'Mastered',
+                    ),
+                    const SizedBox(width: 8),
+                    _InlineStat(
+                      icon: Icons.local_fire_department_rounded,
+                      iconColor: AppColors.accent,
+                      value: notifier.thisWeekCount,
+                      label: 'This week',
+                    ),
+                  ],
+                ),
+              ),
+            ),
+
+            // ── Results count ────────────────────────────────────────────────
+            SliverToBoxAdapter(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+                child: Text(
+                  filtered.isEmpty
+                      ? 'No words found'
+                      : '${filtered.length} word${filtered.length == 1 ? '' : 's'}',
+                  style: AppTextStyles.caption
+                      .copyWith(color: AppColors.onSurfaceMuted),
+                ),
+              ),
+            ),
+
+            // ── Word list or empty state ──────────────────────────────────────
+            if (filtered.isEmpty)
+              SliverFillRemaining(
+                hasScrollBody: false,
+                child: AppEmptyState(
+                  icon: Icons.menu_book_outlined,
+                  title: vocabState.searchQuery.isNotEmpty
+                      ? 'No words match "${vocabState.searchQuery}"'
+                      : 'No words saved yet',
+                  subtitle: vocabState.searchQuery.isNotEmpty
+                      ? 'Try a different search term'
+                      : 'Tap highlighted words in the feed to save them here',
+                ),
+              )
+            else
+              SliverList(
+                delegate: SliverChildBuilderDelegate(
+                  (context, index) {
+                    final savedWord = filtered[index];
+                    return Dismissible(
+                      key: ValueKey(savedWord.word.id),
+                      direction: DismissDirection.endToStart,
+                      background: const _SwipeDeleteBackground(),
+                      confirmDismiss: (_) => _confirmDismiss(context),
+                      onDismissed: (_) => ref
+                          .read(vocabularyNotifierProvider.notifier)
+                          .removeWord(savedWord.word.id),
+                      child: WordCard(
+                        savedWord: savedWord,
+                        onTap: () => context.push(
+                          AppRoutes.wordDetailPath(savedWord.word.id),
+                        ),
+                      ),
+                    );
+                  },
+                  childCount: filtered.length,
+                ),
+              ),
+
+            const SliverToBoxAdapter(
+                child: SizedBox(height: AppSpacing.xl)),
+          ],
         ],
       ),
     );
@@ -197,7 +332,8 @@ class _VocabularyScreenState extends ConsumerState<VocabularyScreen> {
       context: context,
       builder: (_) => AlertDialog(
         backgroundColor: AppColors.surface,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        shape:
+            RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         title: Text('Remove this word?', style: AppTextStyles.headingSmall),
         content: Text(
           'This word will be removed from your vocabulary list.',
@@ -211,10 +347,8 @@ class _VocabularyScreenState extends ConsumerState<VocabularyScreen> {
           ),
           TextButton(
             onPressed: () => Navigator.of(context).pop(true),
-            child: const Text(
-              'Remove',
-              style: TextStyle(color: AppColors.error),
-            ),
+            child: const Text('Remove',
+                style: TextStyle(color: AppColors.error)),
           ),
         ],
       ),
@@ -241,98 +375,147 @@ class _VocabularyScreenState extends ConsumerState<VocabularyScreen> {
   }
 }
 
-// ── Filter chips row ──────────────────────────────────────────────────────────
+// ── Language chip ─────────────────────────────────────────────────────────────
 
-class _FilterChipsRow extends StatelessWidget {
-  const _FilterChipsRow({
-    required this.vocabState,
-    required this.notifier,
+class _LanguageChip extends StatelessWidget {
+  const _LanguageChip({
+    required this.label,
+    required this.flag,
+    required this.isSelected,
+    required this.onTap,
   });
 
-  final VocabularyState vocabState;
-  final VocabularyNotifier notifier;
-
-  bool _isActive(String label) {
-    return switch (label) {
-      'All' =>
-        vocabState.activeLanguageFilter == null &&
-            vocabState.activePosFilter == null,
-      'Japanese' || 'Spanish' || 'Korean' =>
-        vocabState.activeLanguageFilter == label,
-      'Nouns' => vocabState.activePosFilter == 'noun',
-      'Verbs' => vocabState.activePosFilter == 'verb',
-      'Adjectives' => vocabState.activePosFilter == 'adjective',
-      'Phrases' => vocabState.activePosFilter == 'phrase',
-      _ => false,
-    };
-  }
-
-  void _onChipTap(String label) {
-    switch (label) {
-      case 'All':
-        notifier.setLanguageFilter(null);
-        notifier.setPosFilter(null);
-      case 'Japanese' || 'Spanish' || 'Korean':
-        notifier.setLanguageFilter(label);
-        notifier.setPosFilter(null);
-      case 'Nouns':
-        notifier.setPosFilter('noun');
-        notifier.setLanguageFilter(null);
-      case 'Verbs':
-        notifier.setPosFilter('verb');
-        notifier.setLanguageFilter(null);
-      case 'Adjectives':
-        notifier.setPosFilter('adjective');
-        notifier.setLanguageFilter(null);
-      case 'Phrases':
-        notifier.setPosFilter('phrase');
-        notifier.setLanguageFilter(null);
-    }
-  }
+  final String label;
+  final String flag;
+  final bool isSelected;
+  final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
-    const chips = [
-      'All',
-      'Japanese',
-      'Spanish',
-      'Korean',
-      'Nouns',
-      'Verbs',
-      'Adjectives',
-      'Phrases',
-    ];
-
-    return SizedBox(
-      height: 44,
-      child: ListView.separated(
-        scrollDirection: Axis.horizontal,
-        padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
-        itemCount: chips.length,
-        separatorBuilder: (_, __) => const SizedBox(width: AppSpacing.xs),
-        itemBuilder: (context, index) {
-          final label = chips[index];
-          final active = _isActive(label);
-          return GestureDetector(
-            onTap: () => _onChipTap(label),
-            child: Chip(
-              label: Text(
-                label,
-                style: AppTextStyles.labelMedium.copyWith(
-                  color:
-                      active ? Colors.white : AppColors.onSurfaceMuted,
-                ),
+    return GestureDetector(
+      onTap: onTap,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        padding:
+            const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+        decoration: BoxDecoration(
+          color: isSelected
+              ? AppColors.primary
+              : const Color(0xFF1E1E2A),
+          borderRadius: BorderRadius.circular(100),
+          border: Border.all(
+            color: isSelected
+                ? AppColors.primary
+                : Colors.white.withValues(alpha: 0.06),
+          ),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(flag, style: const TextStyle(fontSize: 16)),
+            const SizedBox(width: 6),
+            Text(
+              label,
+              style: AppTextStyles.labelMedium.copyWith(
+                color:
+                    isSelected ? Colors.white : AppColors.onSurfaceMuted,
+                fontWeight:
+                    isSelected ? FontWeight.w600 : FontWeight.w400,
               ),
-              backgroundColor: active
-                  ? AppColors.primary
-                  : const Color(0xFF1E1E2A),
-              shape: const StadiumBorder(),
-              side: BorderSide.none,
-              padding: const EdgeInsets.symmetric(horizontal: 12),
-              materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
             ),
-          );
-        },
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ── Type chip ─────────────────────────────────────────────────────────────────
+
+class _TypeChip extends StatelessWidget {
+  const _TypeChip({
+    required this.label,
+    required this.isSelected,
+    required this.onTap,
+  });
+
+  final String label;
+  final bool isSelected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding:
+            const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+        decoration: BoxDecoration(
+          color: isSelected
+              ? AppColors.primary.withValues(alpha: 0.15)
+              : Colors.transparent,
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(
+            color: isSelected ? AppColors.primary : AppColors.border,
+          ),
+        ),
+        child: Text(
+          label,
+          style: AppTextStyles.labelMedium.copyWith(
+            color: isSelected
+                ? AppColors.primaryLight
+                : AppColors.onSurfaceMuted,
+            fontWeight:
+                isSelected ? FontWeight.w600 : FontWeight.w400,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// ── Inline stat ───────────────────────────────────────────────────────────────
+
+class _InlineStat extends StatelessWidget {
+  const _InlineStat({
+    required this.icon,
+    required this.iconColor,
+    required this.value,
+    required this.label,
+  });
+
+  final IconData icon;
+  final Color iconColor;
+  final int value;
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return Expanded(
+      child: Container(
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: AppColors.card,
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Row(
+          children: [
+            Icon(icon, size: 16, color: iconColor),
+            const SizedBox(width: 8),
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  value.toString(),
+                  style: AppTextStyles.headingSmall
+                      .copyWith(color: Colors.white),
+                ),
+                Text(label, style: AppTextStyles.caption),
+              ],
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -341,6 +524,8 @@ class _FilterChipsRow extends StatelessWidget {
 // ── Swipe delete background ───────────────────────────────────────────────────
 
 class _SwipeDeleteBackground extends StatelessWidget {
+  const _SwipeDeleteBackground();
+
   @override
   Widget build(BuildContext context) {
     return Container(
@@ -403,15 +588,16 @@ class _SortBottomSheet extends StatelessWidget {
           const SizedBox(height: AppSpacing.md),
           Text('Sort by', style: AppTextStyles.headingSmall),
           const SizedBox(height: AppSpacing.sm),
-          ...options.map((o) => ListTile(
-                title: Text(o.label, style: AppTextStyles.bodyMedium),
-                trailing: current == o.order
-                    ? const Icon(Icons.check_rounded,
-                        color: AppColors.primary)
-                    : null,
-                contentPadding: EdgeInsets.zero,
-                onTap: () => onSelect(o.order),
-              )),
+          ...options.map(
+            (o) => ListTile(
+              title: Text(o.label, style: AppTextStyles.bodyMedium),
+              trailing: current == o.order
+                  ? const Icon(Icons.check_rounded, color: AppColors.primary)
+                  : null,
+              contentPadding: EdgeInsets.zero,
+              onTap: () => onSelect(o.order),
+            ),
+          ),
         ],
       ),
     );

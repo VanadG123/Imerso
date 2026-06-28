@@ -1,4 +1,5 @@
 import 'package:riverpod_annotation/riverpod_annotation.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../../data/mock/mock_vocabulary.dart';
 import '../../../data/models/feed_item.dart';
@@ -146,6 +147,35 @@ class VocabularyNotifier extends _$VocabularyNotifier {
   void setSortOrder(WordSortOrder order) {
     state = state.copyWith(sortBy: order);
   }
+
+  // ── Initialisation ──────────────────────────────────────────────────────────
+
+  /// Reads the user's target language from SharedPreferences and pre-selects
+  /// that language filter. Called once from the vocabulary screen's initState.
+  Future<void> initializeFromPrefs() async {
+    final prefs = await SharedPreferences.getInstance();
+    final code = prefs.getString('target_language');
+    if (code == null || code.isEmpty) return;
+    final name = _codeToName(code);
+    if (name != null) {
+      state = state.copyWith(activeLanguageFilter: name);
+    }
+  }
+
+  static String? _codeToName(String code) => switch (code) {
+        'ja' => 'Japanese',
+        'es' => 'Spanish',
+        'ko' => 'Korean',
+        'fr' => 'French',
+        'de' => 'German',
+        'it' => 'Italian',
+        'pt' => 'Portuguese',
+        'zh' => 'Mandarin',
+        'ru' => 'Russian',
+        'ar' => 'Arabic',
+        'hi' => 'Hindi',
+        _ => null,
+      };
 
   // ── Helpers ─────────────────────────────────────────────────────────────────
 
